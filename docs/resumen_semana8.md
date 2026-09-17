@@ -22,6 +22,7 @@ Script que recorre los 100 casos y extrae metadatos completos (shape, spacing, r
 - Spacing: entre 0.625 y 1.25 mm/vóxel según el eje (rango normal para CT clínico).
 - Fragmentos por caso: entre 3 y 9, promedio 5.75.
 
+```text
 ============================================================
 RESUMEN DEL MANIFEST
 ============================================================
@@ -40,6 +41,7 @@ Fragmentos únicos por caso (excluyendo fondo):
   min: 3, max: 9, promedio: 5.75
 
 Manifest guardado en: /Users/mariavalencia/Downloads/pengwin_data/data/manifest.csv
+```
 
 ## 4. Diagnóstico de valores HU (`check_hu_outliers.py`)
 
@@ -49,6 +51,7 @@ Manifest guardado en: /Users/mariavalencia/Downloads/pengwin_data/data/manifest.
   - Valores máximos muy altos (hasta 47,685 HU en un caso) = **artefacto de metal**, esperable porque son pacientes candidatos a cirugía de fijación pélvica (ya traen tornillos/placas en algunos casos).
 - **Decisión:** al aplicar el ventaneo HU se hará un `clip` agresivo (ej. -1024 a 3000) antes de normalizar, para que el padding y el metal no dañen el contraste del hueso. Esto se documentará como hallazgo del EDA.
 
+```text
 Total casos válidos: 100
 
 Top 5 casos con HU máximo más alto:
@@ -121,6 +124,7 @@ Casos con valores fuera del rango esperado (-1100 a 5000 HU): 52
       96 -3193.0 13843.0  -708.974439
       98 -2048.0  1924.0  -804.574777
      100 -6152.0 24970.0  -936.068190
+```
 
 ## 5. Splits fijos (`make_splits.py`)
 
@@ -128,29 +132,162 @@ Casos con valores fuera del rango esperado (-1100 a 5000 HU): 52
 - Estratificado por número de fragmentos (buckets bajo/medio/alto).
 - Semilla fija = 42.
 
+```text
 Bucket 'alto': 26 casos -> train=18, val=4, test=4
 Bucket 'bajo': 1 casos -> train=1, val=0, test=0
 Bucket 'medio': 73 casos -> train=51, val=11, test=11
 
 Total: train=70, val=15, test=15
 Splits guardados en: data/splits.json
+```
 
 **Resultado:** train=70, val=15, test=15.
 
 **Limitación conocida (documentada, no es un bug):** solo existe 1 caso en el bucket "bajo" (≤3 fragmentos), así que ese extremo quedó representado únicamente en train y no en val/test. Se deja anotado para el informe final.
 
-## 6. Pendiente para cerrar la Semana 8
+## 6. Carga de volúmenes y ventaneo HU (`hu windowing check.py`)
 
-- [ ] Loader NIfTI/`.mha` + ventaneo HU (con el clip ya definido), probado visualmente en varios casos.
-- [ ] EDA completo de fragmentos (distribución por caso, tamaños en mm³, etc.).
-- [ ] Visualizador 1 (MIP raw).
-- [ ] Repositorio de GitHub con historial de commits y PRs por integrante.
+- Carga de `.mha` con SimpleITK → array `(z, y, x)` en HU crudo; el spacing sale de `img.GetSpacing()` (orden `x, y, z`).
+- Función `apply_hu_window`: primero `clip` a **[-1024, 3000] HU** (neutraliza padding y metal, ver sección 4) y luego ventana ósea **C=400 / W=1800**, normalizada a `[0, 1]`.
+- Verificado visualmente en 3 casos: `001` (normal), `080` (HU máx. 47 685, metal) y `068` (HU mín. -6 211, padding). Salida: `outputs/figures/hu_window_check_{001,068,080}.png`.
+
+## 7. EDA de fragmentos (`eda_fragments.py`)
+
+Usa la convención oficial de etiquetas de PENGWIN: `0` fondo, `1–10` sacro, `11–20` coxal izquierdo, `21–30` coxal derecho. No apareció ningún label fuera de esa convención (`n_labels_desconocidos = 0` en los 100 casos). El volumen se calcula con el spacing real de cada caso (mm³, no vóxeles).
+
+```text
+============================================================
+RESUMEN EDA DE FRAGMENTOS
+============================================================
+                                   metrica        valor
+                                   n_casos 1.000000e+02
+                      fragmentos_total_min 3.000000e+00
+                      fragmentos_total_max 9.000000e+00
+                    fragmentos_total_media 5.750000e+00
+                    fragmentos_sacro_media 1.530000e+00
+                fragmentos_coxal_izq_media 2.150000e+00
+                fragmentos_coxal_der_media 2.070000e+00
+    casos_sin_fractura_sacro (1 fragmento) 5.500000e+01
+casos_sin_fractura_coxal_izq (1 fragmento) 3.400000e+01
+casos_sin_fractura_coxal_der (1 fragmento) 3.600000e+01
+                     volumen_hueso_mm3_min 5.511926e+05
+                     volumen_hueso_mm3_max 1.095226e+06
+                   volumen_hueso_mm3_media 7.810584e+05
+```
+
+La misma tabla, legible:
+
+| Métrica | Valor |
+|---|---|
+| Casos analizados | 100 |
+| Fragmentos totales por caso | mín 3 · máx 9 · media 5.75 |
+| Fragmentos promedio — sacro | 1.53 |
+| Fragmentos promedio — coxal izquierdo | 2.15 |
+| Fragmentos promedio — coxal derecho | 2.07 |
+| Casos con sacro sin fractura (1 fragmento) | 55 |
+| Casos con coxal izquierdo sin fractura | 34 |
+| Casos con coxal derecho sin fractura | 36 |
+| Volumen de hueso por caso | 551 193 – 1 095 226 mm³ · media 781 058 mm³ (≈ 0.55 – 1.10 L) |
+
+Distribución de fragmentos totales por caso (de `data/eda_fragments_detalle.csv`):
+
+| Fragmentos | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|
+| Casos | 1 | 13 | 32 | 28 | 18 | 6 | 2 |
+
+**Lectura de los resultados:**
+
+- Las tres regiones están presentes en los 100 casos (mínimo = 3 fragmentos = una pelvis con un fragmento por hueso). La cabeza de clasificación no tendrá clases ausentes a nivel de volumen; el desbalance aparecerá a nivel de corte (muchos cortes sin sacro o sin alguno de los coxales).
+- El sacro es el hueso que menos se fractura (55 % intacto, máximo 4 fragmentos); los coxales se fracturan en ~65 % de los casos y son simétricos entre sí (2.15 vs 2.07). Máximo observado: 6 fragmentos en un coxal izquierdo, así que el límite de 10 por región del dataset queda holgado.
+- Solo 1 caso no tiene ninguna fractura (3 fragmentos); es el mismo caso único del bucket "bajo" de los splits.
+- Los splits quedaron balanceados en dificultad: media de fragmentos por caso train 5.76 / val 5.73 / test 5.73.
+- El volumen de hueso varía ~2× entre casos (tamaño del paciente + campo de visión del CT). Es una razón más para medir siempre en mm con el spacing del header y no en vóxeles.
+
+Salidas: `data/eda_fragments_detalle.csv`, `outputs/eda/resumen_estadistico.csv`, `outputs/eda/hist_fragmentos_totales.png`, `outputs/eda/barras_fragmentos_por_region.png`, `outputs/eda/boxplot_volumen_hueso_mm3.png`.
+
+## 8. Visualizador 1 — MIP raw (`mip_visualizer.py`)
+
+- Umbral óseo de **250 HU sobre el volumen crudo** (sin modelo y sin ventaneo), y proyección de máxima intensidad en los tres ejes: axial, coronal y sagital.
+- El aspect ratio de cada vista usa el spacing físico del caso, así que las proporciones son reales.
+- Acepta `case_id` por línea de comandos. Generado para `001`, `025`, `042` y `068` → `outputs/figures/mip_raw_<id>.png`.
+- **Limitación detectada:** en casos con metal (ej. `068`) los picos de HU saturan la escala de grises y el hueso se ve muy oscuro; además se cuelan la camilla y cables. Pendiente fijar `vmin/vmax` en el `imshow` (ej. 250–2000 HU).
+
+## 9. Mini-resumen: qué se hizo y con qué comando
+
+Todos los comandos se corren **desde la raíz del repo** (los scripts usan rutas relativas `data/` y `outputs/`).
+
+| # | Paso | Comando | Qué produce |
+|---|---|---|---|
+| 1 | Manifest del dataset | `python src/build_manifest.py` | `data/manifest.csv` (100/100 válidos, spacing, HU, nº fragmentos) |
+| 2 | Diagnóstico de HU | `python src/check_hu_outliers.py` | Consola: 52 casos con padding/metal → decisión de clip [-1024, 3000] |
+| 3 | Splits fijos | `python src/make_splits.py` | `data/splits.json` (70/15/15, seed 42, por `case_id`, estratificado) |
+| 4 | Ventaneo HU | `python "src/hu windowing check.py"` | `outputs/figures/hu_window_check_*.png` |
+| 5 | EDA de fragmentos | `python src/eda_fragments.py` | `data/eda_fragments_detalle.csv` + `outputs/eda/*` |
+| 6 | Visualizador 1 (MIP) | `python src/mip_visualizer.py` o `python src/mip_visualizer.py 042` | `outputs/figures/mip_raw_<id>.png` |
+
+Orden obligatorio: el paso 1 va primero (2, 3 y 5 leen `data/manifest.csv`). Los pasos 4 y 6 solo necesitan los datos crudos.
+
+## 10. Cómo ejecutarlo desde cero
+
+**1. Clonar el repo**
+
+```bash
+git clone https://github.com/mariavalencia30/proyecto2-analitica-datos.git
+cd proyecto2-analitica-datos
+```
+
+**2. Entorno virtual e instalación**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate            # Windows: venv\Scripts\activate
+pip install --upgrade pip
+pip install SimpleITK numpy pandas matplotlib tqdm
+pip freeze > requirements.txt       # solo la primera vez; luego basta: pip install -r requirements.txt
+```
+
+Versiones con las que se desarrolló (Python 3.14, macOS): SimpleITK 2.5.6 · numpy 2.5.3 · pandas 3.0.5 · matplotlib 3.11.2 · tqdm 4.70.1.
+
+**3. Descargar los datos** desde Zenodo (https://doi.org/10.5281/zenodo.10927452), descomprimir y dejarlos exactamente así (los scripts buscan en `~/Downloads/pengwin_data/raw`):
+
+```text
+~/Downloads/pengwin_data/raw/
+├── PENGWIN_CT_train_images_part1/   001.mha … 
+├── PENGWIN_CT_train_images_part2/   … 100.mha
+└── PENGWIN_CT_train_labels/         001.mha … 100.mha
+```
+
+Si los datos están en otra ruta, cambiar la constante `DATA_ROOT` (y `LABELS_DIR` en `eda_fragments.py`) al inicio de cada script.
+
+**4. Correr el pipeline completo**
+
+```bash
+python src/build_manifest.py
+python src/check_hu_outliers.py
+python src/make_splits.py
+python "src/hu windowing check.py"
+python src/eda_fragments.py
+python src/mip_visualizer.py
+```
+
+**5. Verificar:** el manifest debe reportar 100/100 válidos, los splits 70/15/15, y el EDA debe imprimir la tabla de la sección 7. Como la semilla es fija (42), `data/splits.json` debe salir idéntico al versionado.
+
+## 11. Estado de la Semana 8 y pendientes
+
+- [x] Dataset curado con splits fijos.
+- [x] Carga de `.mha` + ventaneo HU con clip, probado visualmente en 3 casos.
+- [x] EDA de fragmentos por caso.
+- [x] Visualizador 1 (MIP raw) operativo.
+- [ ] Hacer commit de lo nuevo (`eda_fragments.py`, `mip_visualizer.py`, `outputs/eda/`, `mip_raw_*.png`, `eda_fragments_detalle.csv`) — hoy está sin versionar.
+- [ ] Llenar `README.md`, `requirements.txt` e `IA_USAGE.md` (los tres están vacíos).
+- [ ] Mover la carga + ventaneo a un módulo reutilizable (ej. `src/pengwin_io.py`) para que el `Dataset` de PyTorch de la semana 9 lo importe.
+- [ ] Renombrar `src/hu windowing check.py` → `src/hu_windowing_check.py` (`git mv`).
+- [ ] Corregir escala de grises del MIP en casos con metal.
+- [ ] Trabajo por ramas + Pull Requests por integrante y protección de `main`.
 
 ## Archivos generados hasta ahora
-- `src/build_manifest.py`
-- `src/check_hu_outliers.py`
-- `src/make_splits.py`
-- `data/manifest.csv`
-- `data/splits.json`
 
-
+- `src/`: `build_manifest.py`, `check_hu_outliers.py`, `make_splits.py`, `hu windowing check.py`, `eda_fragments.py`, `mip_visualizer.py`
+- `data/`: `manifest.csv`, `splits.json`, `eda_fragments_detalle.csv`
+- `outputs/figures/`: `hu_window_check_{001,068,080}.png`, `mip_raw_{001,025,042,068}.png`
+- `outputs/eda/`: `resumen_estadistico.csv`, `hist_fragmentos_totales.png`, `barras_fragmentos_por_region.png`, `boxplot_volumen_hueso_mm3.png`
