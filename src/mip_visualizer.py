@@ -81,15 +81,15 @@ def mip_visualization(case_id, spacing_xyz=None):
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 6))
 
-    axes[0].imshow(mip_axial, cmap="gray", aspect=sy / sx)
+    axes[0].imshow(mip_axial, cmap="gray", vmin=HU_THRESHOLD, vmax=2000, aspect=sy / sx)
     axes[0].set_title(f"Caso {case_id} — MIP axial")
     axes[0].axis("off")
 
-    axes[1].imshow(mip_coronal, cmap="gray", aspect=sz / sx, origin="lower")
+    axes[1].imshow(mip_coronal, cmap="gray", vmin=HU_THRESHOLD, vmax=2000, aspect=sz / sx, origin="lower")
     axes[1].set_title(f"Caso {case_id} — MIP coronal")
     axes[1].axis("off")
 
-    axes[2].imshow(mip_sagital, cmap="gray", aspect=sz / sy, origin="lower")
+    axes[2].imshow(mip_sagital, cmap="gray", vmin=HU_THRESHOLD, vmax=2000, aspect=sz / sy, origin="lower")
     axes[2].set_title(f"Caso {case_id} — MIP sagital")
     axes[2].axis("off")
 

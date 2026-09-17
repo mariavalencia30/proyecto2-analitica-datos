@@ -48,7 +48,7 @@ Manifest guardado en: /Users/mariavalencia/Downloads/pengwin_data/data/manifest.
 - Se detectaron 52 casos con valores HU fuera del rango típico de CT (-1100 a 5000 HU).
 - **Explicación identificada, no es un error:**
   - Valores mínimos repetidos exactos (ej. -2048, -1023) = **padding** del escáner fuera del campo de reconstrucción.
-  - Valores máximos muy altos (hasta 47,685 HU en un caso) = **artefacto de metal**, esperable porque son pacientes candidatos a cirugía de fijación pélvica (ya traen tornillos/placas en algunos casos).
+  - Valores máximos muy altos (hasta 47,685 HU en un caso) = **artefacto de metal**, pero casi nunca está en el hueso pélvico: el EDA de intensidades (notebook 02) muestra que proviene de implantes femorales y de objetos externos al paciente.
 - **Decisión:** al aplicar el ventaneo HU se hará un `clip` agresivo (ej. -1024 a 3000) antes de normalizar, para que el padding y el metal no dañen el contraste del hueso. Esto se documentará como hallazgo del EDA.
 
 ```text
