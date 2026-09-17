@@ -34,7 +34,7 @@ from tqdm import tqdm
 # CONFIGURACIÓN
 # ---------------------------------------------------------------------------
 MANIFEST_PATH = Path("data/manifest.csv")
-LABELS_DIR = Path.home() / "Downloads" / "pengwin_data" / "raw" / "PENGWIN_CT_train_labels"
+LABELS_DIR = Path("data/raw") / "PENGWIN_CT_train_labels"
 
 OUTPUT_EDA_DIR = Path("outputs/eda")
 OUTPUT_EDA_DIR.mkdir(parents=True, exist_ok=True)

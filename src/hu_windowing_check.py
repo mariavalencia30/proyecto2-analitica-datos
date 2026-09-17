@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------------------------
-DATA_ROOT = Path.home() / "Downloads" / "pengwin_data" / "raw"
+DATA_ROOT = Path("data/raw")
 IMAGES_DIRS = [
     DATA_ROOT / "PENGWIN_CT_train_images_part1",
     DATA_ROOT / "PENGWIN_CT_train_images_part2",
