@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import SimpleITK as sitk
+from scipy import ndimage as ndi
 from skimage.transform import resize as _sk_resize
 
 # ---------------------------------------------------------------------------
@@ -132,11 +133,100 @@ def window_hu(volume: np.ndarray, center: int = WINDOW_CENTER, width: int = WIND
 def bone_mask(volume_hu_crudo: np.ndarray, threshold: int = BONE_HU_THRESHOLD) -> np.ndarray:
     """
     Mascara gruesa de hueso por umbral de intensidad (preprocesamiento
-    clasico, no interviene el modelo). Se usa en el visualizador 1 (MIP/3D
-    del volumen crudo) y para limpiar estructuras que no son hueso
-    (camilla, cables) antes de reconstruir.
+    clasico, no interviene el modelo). Por si sola incluye tambien
+    estructuras metalicas externas al paciente (rieles de la camilla,
+    cables), que tienen HU > threshold igual que el hueso. Para descartar
+    eso usar clean_bone_mask(), no este umbral solo.
     """
     return volume_hu_crudo > threshold
+
+
+BODY_HU_THRESHOLD = -300      # separa aire de tejido/hueso del paciente
+MIN_NOISE_VOXELS = 3000       # descarta bloques de ruido (streaks/metal-artifact)
+                               # mucho mas chicos que la masa osea real; ver
+                               # docstring de clean_bone_mask para el porque
+                               # de no usar apertura morfologica en su lugar.
+
+
+def body_mask(volume_hu_crudo: np.ndarray, threshold: int = BODY_HU_THRESHOLD) -> np.ndarray:
+    """
+    Silueta del cuerpo del paciente: el componente conectado mas grande de
+    la mascara HU > threshold, con huecos internos rellenos (pulmones,
+    gas intestinal). El cuerpo es, por definicion, una unica masa contigua
+    grande; la camilla, rieles y cables externos quedan separados por aire
+    y por eso no forman parte de este componente aunque tengan HU alto.
+
+    Relleno en dos pasadas: 2D por corte axial primero (tecnica estandar
+    para mascara de cuerpo en CT, cierra cavidades de aire dentro de un
+    mismo corte) y luego un relleno 3D final como red de seguridad.
+    """
+    raw = volume_hu_crudo > threshold
+
+    filled = np.zeros_like(raw)
+    for z in range(raw.shape[0]):
+        filled[z] = ndi.binary_fill_holes(raw[z])
+
+    labels, n_components = ndi.label(filled, structure=np.ones((3, 3, 3)))
+    if n_components == 0:
+        return filled
+
+    sizes = ndi.sum(filled, labels, index=np.arange(1, n_components + 1))
+    biggest = int(np.argmax(sizes)) + 1
+    mask = labels == biggest
+
+    return ndi.binary_fill_holes(mask)
+
+
+def clean_bone_mask(volume_hu_crudo: np.ndarray, bone_threshold: int = BONE_HU_THRESHOLD,
+                     body_threshold: int = BODY_HU_THRESHOLD,
+                     min_noise_voxels: int = MIN_NOISE_VOXELS,
+                     opening_iterations: int = 0) -> np.ndarray:
+    """
+    Mascara de hueso limpia, sin camilla ni cables: interseccion entre
+    bone_mask() y body_mask(), seguida de un filtro de componentes
+    conectados pequenos (rayas de beam hardening y motas de metal-artifact
+    que, dentro del cuerpo, forman bloques mucho mas chicos que la masa
+    osea completa).
+
+    opening_iterations=0 por defecto A PROPOSITO. Se probo con apertura
+    morfologica y destruyo hueso cortical real: a este spacing (~0.7-0.8
+    mm/voxel) la cortical solo tiene 2-3 voxeles de grosor, practicamente
+    el mismo grosor que las rayas de artefacto, asi que cualquier erosion
+    3D borra ambas por igual (crestas iliacas perforadas, sacro
+    fragmentado). El filtro por tamano de componente es mas seguro porque
+    es una decision de todo-o-nada por bloque completo, nunca le quita una
+    capa de voxeles a una estructura que sobrevive el filtro.
+
+    Si sigue quedando alguna raya de artefacto que NO se elimina, es porque
+    esta conectada directamente al hueso (nace de un tornillo/implante
+    dentro del hueso) y en ese caso ningun filtro por tamano o forma la
+    va a separar sin tambien afectar el hueso — documentarlo como
+    limitacion conocida en el model card, no forzar mas limpieza aqui.
+
+    Usada por el visualizador 1 (reconstruccion 3D del volumen crudo) y
+    reutilizable por el visualizador 3 (reconstruccion final), para no
+    duplicar esta logica de limpieza.
+    """
+    hueso = bone_mask(volume_hu_crudo, bone_threshold)
+    cuerpo = body_mask(volume_hu_crudo, body_threshold)
+    limpio = hueso & cuerpo
+
+    if opening_iterations > 0:
+        limpio = ndi.binary_opening(
+            limpio, structure=np.ones((3, 3, 3)), iterations=opening_iterations
+        )
+
+    labels, n_components = ndi.label(limpio, structure=np.ones((3, 3, 3)))
+    if n_components == 0:
+        return limpio
+    sizes = ndi.sum(limpio, labels, index=np.arange(1, n_components + 1))
+
+    keep = np.zeros_like(limpio)
+    for comp_id, size in enumerate(sizes, start=1):
+        if size >= min_noise_voxels:
+            keep |= (labels == comp_id)
+
+    return keep
 
 
 def resize_slice(slice_2d: np.ndarray, size: int = 256, order: int = 1) -> np.ndarray:
