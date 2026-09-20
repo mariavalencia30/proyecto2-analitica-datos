@@ -1,0 +1,13 @@
+# Proyecto PENGWIN — Corte 2, semana 8
+# Python 3.11 o 3.12. Instalar con:
+#   pip install -r requirements.txt
+
+SimpleITK
+numpy
+pandas
+matplotlib
+tqdm
+scipy
+scikit-image
+plotly
+torch

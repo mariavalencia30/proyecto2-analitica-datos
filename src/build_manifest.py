@@ -27,7 +27,7 @@ from tqdm import tqdm
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN — ajusta esta ruta si moviste los datos a otro lugar
 # ---------------------------------------------------------------------------
-DATA_ROOT = Path.home() / "Downloads" / "pengwin_data" / "raw"
+DATA_ROOT = Path("data/raw")
 
 IMAGES_DIRS = [
     DATA_ROOT / "PENGWIN_CT_train_images_part1",

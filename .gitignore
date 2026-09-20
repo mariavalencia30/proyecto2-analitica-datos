@@ -3,3 +3,7 @@ __pycache__/
 .ipynb_checkpoints/
 *.pth
 .DS_Store
+.Rhistory
+data/raw/
+
+.venv/
