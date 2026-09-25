@@ -1,4 +1,4 @@
-# PENGWIN — Detección, segmentación y clasificación de fracturas pélvicas en CT
+# PENGWIN —- Detección, segmentación y clasificación de fracturas pélvicas en CT
 
 Proyecto Integrador Corte 2 — Analítica de Datos, Universidad Autónoma de Occidente (2026-2).
 Profesor: Carlos Ferro.
